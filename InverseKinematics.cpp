@@ -36,7 +36,7 @@ using namespace std;
 using namespace Eigen;
 
 
-const double THETA_CHANGE = 0.001;
+const double THETA_CHANGE = 0.1;
 
 
 Vector3d rotateX(const Vector3d& p, double theta) {
@@ -44,7 +44,7 @@ Vector3d rotateX(const Vector3d& p, double theta) {
     rotateX <<
         1, 0, 0,
         0, cos(theta), -sin(theta),
-        0, sin(theta), sin(theta);
+        0, sin(theta), cos(theta);
 
     return rotateX * p;
 }
@@ -63,7 +63,7 @@ Vector3d rotateZ(const Vector3d& p, double theta) {
     Matrix3d rotateZ;
     rotateZ <<
         cos(theta), -sin(theta), 0,
-        sin(theta), sin(theta), 0,
+        sin(theta), cos(theta), 0,
         0, 0, 1;
 
     return rotateZ * p;
@@ -105,10 +105,13 @@ Joint::Joint(Vector3d inBasePoint, double inLength) {
 void Joint::update(Vector3d dtheta, Vector3d newBasePoint) {
     basePoint = newBasePoint;
 
-    Vector3d translated = translate(endPoint, newBasePoint);
+    Vector3d original(0.0, length, 0.0);
 
-    Vector3d newEndPoint = rotateZ(rotateY(rotateX(translated, dtheta[0]), dtheta[1]), dtheta[2]);
+    theta += dtheta;
+
+    Vector3d newEndPoint = rotateZ(rotateY(rotateX(original, theta[0]), theta[1]), theta[2]);
     endPoint = translate(newEndPoint, -newBasePoint);
+
 }
 
 void Joint::render() {
@@ -148,12 +151,13 @@ MatrixXd System::getJacobian() {
     for (int i = 0; i < joints.size(); i++) {
         Vector3d newTheta = joints[i].theta + deltaTheta;
 
-        Vector3d original = translate(joints[i].endPoint, joints[i].basePoint);
+        Vector3d original(0.0, joints[i].length, 0.0); //translate(joints[i].endPoint, joints[i].basePoint);
+
 
         Vector3d p = rotateX(original, joints[i].theta[0]);
         Vector3d newP = rotateX(original, newTheta[0]);
 
-        Vector3d col1 = (p - newP) / THETA_CHANGE;
+        Vector3d col1 = (newP - p) / THETA_CHANGE;
 
         result(0, i * 3) = col1[0];
         result(1, i * 3) = col1[1];
@@ -162,7 +166,7 @@ MatrixXd System::getJacobian() {
         p = rotateY(original, joints[i].theta[1]);
         newP = rotateY(original, newTheta[1]);
 
-        Vector3d col2 = (p - newP) / THETA_CHANGE;
+        Vector3d col2 = (newP - p) / THETA_CHANGE;
 
         result(0, i * 3 + 1) = col2[0];
         result(1, i * 3 + 1) = col2[1];
@@ -171,13 +175,12 @@ MatrixXd System::getJacobian() {
         p = rotateZ(original, joints[i].theta[2]);
         newP = rotateZ(original, newTheta[2]);
 
-        Vector3d col3 = (p - newP) / THETA_CHANGE;
+        Vector3d col3 = (newP - p) / THETA_CHANGE;
 
         result(0, i * 3 + 2) = col3[0];
         result(1, i * 3 + 2) = col3[1];
         result(2, i * 3 + 2) = col3[2];
     }
-
 
 
     return result;
@@ -231,6 +234,8 @@ void System::render() {
     for(int i = 0; i < joints.size(); i++) {
         glColor3d(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
         joints[i].render();
+        // cout << (joints[i].endPoint - joints[i].basePoint).norm() << "lol" << endl;
+        cout << joints[i].endPoint << "lol" << endl;
     }
 }
 
@@ -260,6 +265,7 @@ void myReshape(int w, int h) {
 }
 
 
+int lol;
 
 
 void initScene(){
@@ -277,7 +283,6 @@ void initScene(){
 
 
 
-
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -289,7 +294,10 @@ void display() {
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    arm.update(Vector3d(1.5, 0.0, 0.0));
+    Vector3d goal(0.7, 0.0, 0.7);
+
+
+    arm.update(goal);
     arm.render();
 
     glFlush();

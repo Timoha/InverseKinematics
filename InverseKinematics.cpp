@@ -36,7 +36,7 @@ using namespace std;
 using namespace Eigen;
 
 
-const double THETA_CHANGE = 0.1;
+const double THETA_CHANGE = 0.01;
 
 
 Vector3d rotateX(const Vector3d& p, double theta) {
@@ -88,7 +88,7 @@ public:
     Vector3d theta;
     Vector3d basePoint, endPoint;
 
-    void update(Vector3d dtheta, Vector3d newBasePoint);
+    void update(Vector3d dtheta, Vector3d newBasePoint, Vector3d newEndPoint);
     void render();
 
     Joint(Vector3d inBasePoint, double inLength);
@@ -102,15 +102,15 @@ Joint::Joint(Vector3d inBasePoint, double inLength) {
     endPoint = basePoint + Vector3d(0.0, length, 0.0);
 }
 
-void Joint::update(Vector3d dtheta, Vector3d newBasePoint) {
+void Joint::update(Vector3d dtheta, Vector3d newBasePoint, Vector3d newEndPoint) {
     basePoint = newBasePoint;
 
-    Vector3d original(0.0, length, 0.0);
+    // Vector3d original(0.0, length, 0.0);
 
     theta += dtheta;
 
-    Vector3d newEndPoint = rotateZ(rotateY(rotateX(original, theta[0]), theta[1]), theta[2]);
-    endPoint = translate(newEndPoint, -newBasePoint);
+    // Vector3d newEndPoint = rotateZ(rotateY(rotateX(original, theta[0]), theta[1]), theta[2]);
+    endPoint = newEndPoint; // translate(newEndPoint, -newBasePoint);
 
 }
 
@@ -142,19 +142,27 @@ System::System(vector<Joint> inJoints) {
 }
 
 
+double PI = 3.141592654;
+
+
 MatrixXd System::getJacobian() {
     MatrixXd result(3, 3 * joints.size());
 
     Vector3d deltaTheta(1.0, 1.0, 1.0);
     deltaTheta *= THETA_CHANGE;
 
+    Vector3d originalTheta(0.0, 0.0, 0.0);
+
+
     for (int i = 0; i < joints.size(); i++) {
-        Vector3d newTheta = joints[i].theta + deltaTheta;
 
-        Vector3d original(0.0, joints[i].length, 0.0); //translate(joints[i].endPoint, joints[i].basePoint);
+        Vector3d newTheta = originalTheta + deltaTheta;
 
+        Vector3d p = joints[joints.size() - 1].endPoint;
 
-        Vector3d p = rotateX(original, joints[i].theta[0]);
+        Vector3d original = translate(p, joints[i].basePoint);
+
+        p = rotateX(original, originalTheta[0]);
         Vector3d newP = rotateX(original, newTheta[0]);
 
         Vector3d col1 = (newP - p) / THETA_CHANGE;
@@ -163,7 +171,7 @@ MatrixXd System::getJacobian() {
         result(1, i * 3) = col1[1];
         result(2, i * 3) = col1[2];
 
-        p = rotateY(original, joints[i].theta[1]);
+        p = rotateY(original, originalTheta[1]);
         newP = rotateY(original, newTheta[1]);
 
         Vector3d col2 = (newP - p) / THETA_CHANGE;
@@ -172,7 +180,7 @@ MatrixXd System::getJacobian() {
         result(1, i * 3 + 1) = col2[1];
         result(2, i * 3 + 1) = col2[2];
 
-        p = rotateZ(original, joints[i].theta[2]);
+        p = rotateZ(original, originalTheta[2]);
         newP = rotateZ(original, newTheta[2]);
 
         Vector3d col3 = (newP - p) / THETA_CHANGE;
@@ -180,6 +188,9 @@ MatrixXd System::getJacobian() {
         result(0, i * 3 + 2) = col3[0];
         result(1, i * 3 + 2) = col3[1];
         result(2, i * 3 + 2) = col3[2];
+
+
+        originalTheta += joints[i].theta;
     }
 
 
@@ -191,16 +202,35 @@ void System::updateJoints(const VectorXd& dtheta) {
 
     Vector3d newBasePoint = joints[0].basePoint;
     Vector3d currDTheta(0.0, 0.0, 0.0);
+    Vector3d currTheta(0.0, 0.0, 0.0);// = joints[i].theta;
+    Vector3d original(0.0, 1.0, 0.0);
+
+    // Vector3d newEndPoint(0.0, 0.0, 0.0);
+
     for(int i = 0; i < joints.size(); i++) {
         currDTheta = Vector3d(dtheta[3*i], dtheta[3*i+1], dtheta[3*i+2]);
-        joints[i].update(currDTheta, newBasePoint);
+        currTheta += joints[i].theta + currDTheta;
+
+        original = Vector3d(0.0, joints[i].length, 0.0);
+
+        Vector3d newEndPoint = rotateZ(rotateY(rotateX(original, currTheta[0]), currTheta[1]), currTheta[2]);
+        newEndPoint = translate(newEndPoint, -newBasePoint);
+        joints[i].update(currDTheta, newBasePoint, newEndPoint);
         newBasePoint = joints[i].endPoint;
     }
 }
 
 
+
+MatrixXd getPseudoInverse(MatrixXd& J) {
+    MatrixXd transposeJ = J.transpose();
+
+    return transposeJ * (J * transposeJ).inverse();
+}
+
+
 bool System::update(Vector3d g) {
-    Vector3d gSys = g - joints[0].basePoint;
+    // Vector3d dX = g - joints[0].basePoint;
 
     double jointsLength = 0.0;
 
@@ -208,20 +238,34 @@ bool System::update(Vector3d g) {
         jointsLength += joints[i].length;
     }
 
-    if (gSys.norm() > jointsLength) {
-        cout << "not reachable" << endl;
-    }
+    // if (dX.norm() > jointsLength) {
+    //     cout << "not reachable" << endl;
+    // }
     Vector3d dp = g - joints[joints.size() - 1].endPoint;
-    if (dp.norm() > 0.0001) {
-        MatrixXd J = getJacobian();
 
-        VectorXd dtheta = J.jacobiSvd(ComputeThinU | ComputeThinV).solve(dp);
+    // MatrixXd I = MatrixXd::Identity(3, 3);
+    MatrixXd J, inverseJ;
 
+    double error = std::numeric_limits<double>::max();
+
+    J = getJacobian();
+    inverseJ = getPseudoInverse(J);
+    // while ( error > 2.0e-15 ) {
+
+    //     error = ((I - J * inverseJ) * dp).norm();
+
+    //     cout << error << endl;
+
+    //     dp /= 2;
+    // }
+
+    if (dp.norm() > 0.01) {
+
+        VectorXd dtheta = inverseJ * dp;
         updateJoints(dtheta);
         return true;
     }
 
-    return false;
 }
 
 
@@ -235,7 +279,7 @@ void System::render() {
         glColor3d(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
         joints[i].render();
         // cout << (joints[i].endPoint - joints[i].basePoint).norm() << "lol" << endl;
-        cout << joints[i].endPoint << "lol" << endl;
+        // cout << joints[i].theta << "lol" << endl;
     }
 }
 
@@ -272,9 +316,9 @@ void initScene(){
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Clear to black, fully transparent
 
 
-    bones.push_back(Joint(Vector3d(0.0, 0.0, 0.0), 0.5));
-    bones.push_back(Joint(bones[0].endPoint, 0.5));
-    bones.push_back(Joint(bones[1].endPoint, 0.5));
+    bones.push_back(Joint(Vector3d(0.0, 0.0, 0.0), 0.8));
+    // bones.push_back(Joint(bones[0].endPoint, 0.8));
+    // bones.push_back(Joint(bones[1].endPoint, 0.5));
 
     arm = System(bones);
 
@@ -294,7 +338,7 @@ void display() {
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    Vector3d goal(0.7, 0.0, 0.7);
+    Vector3d goal(0.8, 0.0, 0.0);
 
 
     arm.update(goal);

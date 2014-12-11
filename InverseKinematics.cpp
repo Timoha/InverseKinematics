@@ -228,9 +228,10 @@ bool System::update(Vector3d g) {
         jointsLength += joints[i].length;
     }
 
-    // if (dX.norm() > jointsLength) {
-    //     cout << "not reachable" << endl;
-    // }
+    if (g.norm() > jointsLength) {
+        g = g.normalized() * jointsLength;
+    }
+
     Vector3d dp = g - joints[joints.size() - 1].endPoint;
 
     MatrixXd I = MatrixXd::Identity(3, 3);
@@ -249,16 +250,16 @@ bool System::update(Vector3d g) {
         // dp /= 2;
     // }
 
-    if (dp.norm() > 0.01) {
+    // if (dp.norm() > 0.01) {
     
     
 
         VectorXd dtheta = inverseJ * dp;
         updateJoints(dtheta);
 
-        cout << dtheta << "lol" << endl;
+        // cout << dtheta << "lol" << endl;
         // return false;
-    }
+    // }
 
     return true;
 
@@ -379,7 +380,6 @@ void display() {
 
 
     if (arm.update(goals[currGoalIndex]) ) {
-        cout << currGoalIndex << endl;
 
         if (currGoalIndex < goals.size() - 1) {
             currGoalIndex++;

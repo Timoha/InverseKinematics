@@ -148,49 +148,39 @@ double PI = 3.141592654;
 MatrixXd System::getJacobian() {
     MatrixXd result(3, 3 * joints.size());
 
-    Vector3d deltaTheta(1.0, 1.0, 1.0);
-    deltaTheta *= THETA_CHANGE;
 
-    Vector3d originalTheta(0.0, 0.0, 0.0);
-
-
+    Vector3d p = joints[joints.size() - 1].endPoint;
     for (int i = 0; i < joints.size(); i++) {
 
-        Vector3d newTheta = originalTheta + deltaTheta;
 
-        Vector3d p = joints[joints.size() - 1].endPoint;
 
         Vector3d original = translate(p, joints[i].basePoint);
 
-        p = rotateX(original, originalTheta[0]);
-        Vector3d newP = rotateX(original, newTheta[0]);
+        Vector3d newP = rotateX(original, THETA_CHANGE);
 
-        Vector3d col1 = (newP - p) / THETA_CHANGE;
+        Vector3d col1 = (newP - original) / THETA_CHANGE;
 
         result(0, i * 3) = col1[0];
         result(1, i * 3) = col1[1];
         result(2, i * 3) = col1[2];
 
-        p = rotateY(original, originalTheta[1]);
-        newP = rotateY(original, newTheta[1]);
+        newP = rotateY(original, THETA_CHANGE);
 
-        Vector3d col2 = (newP - p) / THETA_CHANGE;
+        Vector3d col2 = (newP - original) / THETA_CHANGE;
 
         result(0, i * 3 + 1) = col2[0];
         result(1, i * 3 + 1) = col2[1];
         result(2, i * 3 + 1) = col2[2];
 
-        p = rotateZ(original, originalTheta[2]);
-        newP = rotateZ(original, newTheta[2]);
+        newP = rotateZ(original, THETA_CHANGE);
 
-        Vector3d col3 = (newP - p) / THETA_CHANGE;
+        Vector3d col3 = (newP - original) / THETA_CHANGE;
 
         result(0, i * 3 + 2) = col3[0];
         result(1, i * 3 + 2) = col3[1];
         result(2, i * 3 + 2) = col3[2];
 
 
-        originalTheta += joints[i].theta;
     }
 
 
@@ -243,7 +233,7 @@ bool System::update(Vector3d g) {
     // }
     Vector3d dp = g - joints[joints.size() - 1].endPoint;
 
-    // MatrixXd I = MatrixXd::Identity(3, 3);
+    MatrixXd I = MatrixXd::Identity(3, 3);
     MatrixXd J, inverseJ;
 
     double error = std::numeric_limits<double>::max();
@@ -252,19 +242,25 @@ bool System::update(Vector3d g) {
     inverseJ = getPseudoInverse(J);
     // while ( error > 2.0e-15 ) {
 
-    //     error = ((I - J * inverseJ) * dp).norm();
+        // error = ((I - J * inverseJ) * dp).norm();
 
-    //     cout << error << endl;
+        // cout << error << endl;
 
-    //     dp /= 2;
+        // dp /= 2;
     // }
 
     if (dp.norm() > 0.01) {
+    
+    
 
         VectorXd dtheta = inverseJ * dp;
         updateJoints(dtheta);
-        return true;
+
+        cout << dtheta << "lol" << endl;
+        // return false;
     }
+
+    return true;
 
 }
 
@@ -284,6 +280,9 @@ void System::render() {
 }
 
 
+vector<Vector3d> goals;
+
+int currGoalIndex;
 
 Viewport viewport;
 vector<Joint> bones;
@@ -309,18 +308,58 @@ void myReshape(int w, int h) {
 }
 
 
-int lol;
 
 
 void initScene(){
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Clear to black, fully transparent
 
 
-    bones.push_back(Joint(Vector3d(0.0, 0.0, 0.0), 0.8));
-    // bones.push_back(Joint(bones[0].endPoint, 0.8));
-    // bones.push_back(Joint(bones[1].endPoint, 0.5));
+    bones.push_back(Joint(Vector3d(0.0, 0.0, 0.0), 0.2));
+    bones.push_back(Joint(bones[0].endPoint, 0.8));
+    bones.push_back(Joint(bones[1].endPoint, 0.5));
 
     arm = System(bones);
+
+    // goals.push_back(Vector3d(1.44, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.45, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.46, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.47, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.48, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.49, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.5, 0.0, 0.0));
+    goals.push_back(Vector3d(1.55, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.52, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.53, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.54, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.55, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.56, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.57, 0.0, 0.0));
+
+    // goals.push_back(Vector3d(1.58, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.59, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.6, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.61, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.62, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.63, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.64, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.65, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.66, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.67, 0.0, 0.0));
+   //goals.push_back(Vector3d(1.31, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.32, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.33, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.34, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.33, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.32, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.31, 0.0, 0.0));
+    //goals.push_back(Vector3d(1.5, 0.0, 0.0));
+
+
+    // goals.push_back(Vector3d(1.5, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.4, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.6, 0.0, 0.0));
+
+    currGoalIndex = 0;
 
     myReshape(viewport.w, viewport.h);
 }
@@ -338,10 +377,15 @@ void display() {
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    Vector3d goal(0.8, 0.0, 0.0);
 
+    if (arm.update(goals[currGoalIndex]) ) {
+        cout << currGoalIndex << endl;
 
-    arm.update(goal);
+        if (currGoalIndex < goals.size() - 1) {
+            currGoalIndex++;
+        }
+        // currGoalIndex = (currGoalIndex + 1) % goals.size();
+    }
     arm.render();
 
     glFlush();

@@ -38,6 +38,9 @@ using namespace Eigen;
 
 const double THETA_CHANGE = 0.01;
 
+const double PI = 3.141592654;
+
+
 
 Vector3d rotateX(const Vector3d& p, double theta) {
     Matrix3d rotateX;
@@ -59,6 +62,7 @@ Vector3d rotateY(const Vector3d& p, double theta) {
     return rotateY * p;
 }
 
+
 Vector3d rotateZ(const Vector3d& p, double theta) {
     Matrix3d rotateZ;
     rotateZ <<
@@ -68,6 +72,7 @@ Vector3d rotateZ(const Vector3d& p, double theta) {
 
     return rotateZ * p;
 }
+
 
 
 Vector3d translate(const Vector3d& p, const Vector3d& to) {
@@ -89,7 +94,7 @@ public:
     Vector3d basePoint, endPoint;
 
     void update(Vector3d dtheta, Vector3d newBasePoint, Vector3d newEndPoint);
-    void render();
+    void render(Vector3d thetaPrev);
 
     Joint(Vector3d inBasePoint, double inLength);
 };
@@ -102,6 +107,7 @@ Joint::Joint(Vector3d inBasePoint, double inLength) {
     endPoint = basePoint + Vector3d(0.0, length, 0.0);
 }
 
+
 void Joint::update(Vector3d dtheta, Vector3d newBasePoint, Vector3d newEndPoint) {
     basePoint = newBasePoint;
 
@@ -111,14 +117,90 @@ void Joint::update(Vector3d dtheta, Vector3d newBasePoint, Vector3d newEndPoint)
 
     // Vector3d newEndPoint = rotateZ(rotateY(rotateX(original, theta[0]), theta[1]), theta[2]);
     endPoint = newEndPoint; // translate(newEndPoint, -newBasePoint);
-
 }
 
-void Joint::render() {
-    glBegin(GL_LINES);
-        glVertex3d(basePoint[0], basePoint[1], basePoint[2]);
-        glVertex3d(endPoint[0], endPoint[1], endPoint[2]);
-    glEnd();
+
+void Joint::render(Vector3d thetaPrev) {
+
+
+    Vector3d base(0.0, 0.0, 0.0);
+    Vector3d end(0.0, length, 0.0);
+
+
+    Vector3d toDegrees = 180.0/PI * (thetaPrev + theta);
+
+
+    double d = length / 5;
+    Vector3d first    = base + Vector3d(-d, length/3, -d);
+    Vector3d second   = base + Vector3d(d, length/3, -d);
+    Vector3d third    = base + Vector3d(d, length/3, d);
+    Vector3d fourth   = base + Vector3d(-d, length/3, d);
+
+    // glBegin(GL_LINES);
+    //     glVertex3d(basePoint[0], basePoint[1], basePoint[2]);
+    //     glVertex3d(endPoint[0], endPoint[1], endPoint[2]);
+    // glEnd();
+
+
+
+
+    glPushMatrix();
+
+        glTranslated(basePoint[0], basePoint[1], basePoint[2]);
+        glRotated(toDegrees[2], 0, 0, 1);
+        glRotated(toDegrees[1], 0, 1, 0);
+        glRotated(toDegrees[0], 1, 0, 0);
+
+        glBegin(GL_POLYGON);
+            glVertex3d(base[0], base[1], base[2]);
+            glVertex3d(first[0], first[1], first[2]);
+            glVertex3d(second[0], second[1], second[2]);
+        glEnd();
+
+        glBegin(GL_POLYGON);
+            glVertex3d(base[0], base[1], base[2]);
+            glVertex3d(second[0], second[1], second[2]);
+            glVertex3d(third[0], third[1], third[2]);
+        glEnd();
+
+        glBegin(GL_POLYGON);
+            glVertex3d(base[0], base[1], base[2]);
+            glVertex3d(third[0], third[1], third[2]);
+            glVertex3d(fourth[0], fourth[1], fourth[2]);
+        glEnd();
+
+        glBegin(GL_POLYGON);
+            glVertex3d(base[0], base[1], base[2]);
+            glVertex3d(fourth[0], fourth[1], fourth[2]);
+            glVertex3d(first[0], first[1], first[2]);
+        glEnd();
+
+        //second
+        glBegin(GL_POLYGON);
+            glVertex3d(end[0], end[1], end[2]);
+            glVertex3d(first[0], first[1], first[2]);
+            glVertex3d(second[0], second[1], second[2]);
+        glEnd();
+
+        glBegin(GL_POLYGON);
+            glVertex3d(end[0], end[1], end[2]);
+            glVertex3d(second[0], second[1], second[2]);
+            glVertex3d(third[0], third[1], third[2]);
+        glEnd();
+
+        glBegin(GL_POLYGON);
+            glVertex3d(end[0], end[1], end[2]);
+            glVertex3d(third[0], third[1], third[2]);
+            glVertex3d(fourth[0], fourth[1], fourth[2]);
+        glEnd();
+
+        glBegin(GL_POLYGON);
+            glVertex3d(end[0], end[1], end[2]);
+            glVertex3d(fourth[0], fourth[1], fourth[2]);
+            glVertex3d(first[0], first[1], first[2]);
+        glEnd();
+
+    glPopMatrix();
 }
 
 
@@ -142,7 +224,6 @@ System::System(vector<Joint> inJoints) {
 }
 
 
-double PI = 3.141592654;
 
 
 MatrixXd System::getJacobian() {
@@ -183,7 +264,6 @@ MatrixXd System::getJacobian() {
 
     }
 
-
     return result;
 }
 
@@ -219,6 +299,7 @@ MatrixXd getPseudoInverse(MatrixXd& J) {
 }
 
 
+
 bool System::update(Vector3d g) {
     // Vector3d dX = g - joints[0].basePoint;
 
@@ -234,49 +315,32 @@ bool System::update(Vector3d g) {
 
     Vector3d dp = g - joints[joints.size() - 1].endPoint;
 
-    MatrixXd I = MatrixXd::Identity(3, 3);
-    MatrixXd J, inverseJ;
+    // MatrixXd I = MatrixXd::Identity(3, 3);
+    // MatrixXd J, inverseJ;
 
-    double error = std::numeric_limits<double>::max();
 
-    J = getJacobian();
-    inverseJ = getPseudoInverse(J);
-    // while ( error > 2.0e-15 ) {
+    MatrixXd J = getJacobian();
+    // inverseJ = getPseudoInverse(J);
 
-        // error = ((I - J * inverseJ) * dp).norm();
-
-        // cout << error << endl;
-
-        // dp /= 2;
-    // }
-
-    // if (dp.norm() > 0.01) {
-    
-    
-
-        VectorXd dtheta = inverseJ * dp;
-        updateJoints(dtheta);
-
-        // cout << dtheta << "lol" << endl;
-        // return false;
-    // }
+    VectorXd dtheta = J.jacobiSvd(ComputeThinU | ComputeThinV).solve(dp);
+    updateJoints(dtheta);
 
     return true;
-
 }
 
 
 double colors[] = {0.0, 0.0, 1.0,
                    0.0, 1.0, 0.0,
-                   1.0, 0.0, 0.0 };
+                   1.0, 0.0, 0.0,
+                   1.0, 1.0, 0.0 };
 
 
 void System::render() {
+    Vector3d thetaPrev(0.0, 0.0, 0.0);
     for(int i = 0; i < joints.size(); i++) {
         glColor3d(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
-        joints[i].render();
-        // cout << (joints[i].endPoint - joints[i].basePoint).norm() << "lol" << endl;
-        // cout << joints[i].theta << "lol" << endl;
+        joints[i].render(thetaPrev);
+        thetaPrev += joints[i].theta;
     }
 }
 
@@ -301,7 +365,7 @@ void myReshape(int w, int h) {
     //----------- setting the projection -------------------------
     // glOrtho sets left, right, bottom, top, zNear, zFar of the chord system
     // glOrtho(-1, 1 + (w-400)/200.0 , -1 -(h-400)/200.0, 1, 1, -1); // resize type = add
-     glOrtho(-w/400.0, w/400.0, -h/400.0, h/400.0, 2, -2); // resize type = center
+    glOrtho(-w/400.0, w/400.0, -h/400.0, h/400.0, 2, -2); // resize type = center
 
     //glOrtho(-4, 4, -4, 4, 2, -2);    // resize type = stretch
 
@@ -317,18 +381,19 @@ void initScene(){
 
     bones.push_back(Joint(Vector3d(0.0, 0.0, 0.0), 0.2));
     bones.push_back(Joint(bones[0].endPoint, 0.8));
-    bones.push_back(Joint(bones[1].endPoint, 0.5));
+    bones.push_back(Joint(bones[1].endPoint, 0.3));
+    bones.push_back(Joint(bones[2].endPoint, 0.7));
 
     arm = System(bones);
 
-    // goals.push_back(Vector3d(1.44, 0.0, 0.0));
+    goals.push_back(Vector3d(2.0, 0.0, 0.0));
     // goals.push_back(Vector3d(1.45, 0.0, 0.0));
     // goals.push_back(Vector3d(1.46, 0.0, 0.0));
     // goals.push_back(Vector3d(1.47, 0.0, 0.0));
     // goals.push_back(Vector3d(1.48, 0.0, 0.0));
     // goals.push_back(Vector3d(1.49, 0.0, 0.0));
     // goals.push_back(Vector3d(1.5, 0.0, 0.0));
-    goals.push_back(Vector3d(1.55, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.55, 0.0, 0.0));
     // goals.push_back(Vector3d(1.52, 0.0, 0.0));
     // goals.push_back(Vector3d(1.53, 0.0, 0.0));
     // goals.push_back(Vector3d(1.54, 0.0, 0.0));

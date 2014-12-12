@@ -36,9 +36,25 @@ using namespace std;
 using namespace Eigen;
 
 
+const double SCALE_DELTA = 0.5;
+
+
 const double THETA_CHANGE = 0.01;
 
 const double PI = 3.141592654;
+
+
+// angle of rotation for the camera direction
+float angleH=0.0, angleV=0.0;
+// actual vector representing the camera's direction
+float lx=0.0f, ly=0.0f, lz=-1.0f;
+// XZ position of the camera
+float x=0.0f,y=0.0f,z=2.0f;
+
+float zoomFactor = 1.0f;
+
+
+Vector3d camera(0.0, 0.0, 4.0);
 
 
 
@@ -130,7 +146,7 @@ void Joint::render(Vector3d thetaPrev) {
     Vector3d toDegrees = 180.0/PI * (thetaPrev + theta);
 
 
-    double d = length / 5;
+    double d = length / 6;
     Vector3d first    = base + Vector3d(-d, length/3, -d);
     Vector3d second   = base + Vector3d(d, length/3, -d);
     Vector3d third    = base + Vector3d(d, length/3, d);
@@ -338,7 +354,10 @@ double colors[] = {0.0, 0.0, 1.0,
 void System::render() {
     Vector3d thetaPrev(0.0, 0.0, 0.0);
     for(int i = 0; i < joints.size(); i++) {
-        glColor3d(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+        // glColor3d(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+
+        GLfloat lightColor0[] = { colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2], 1.0f }; //Color (0.5, 0.5, 0.5)
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor0);
         joints[i].render(thetaPrev);
         thetaPrev += joints[i].theta;
     }
@@ -373,9 +392,61 @@ void myReshape(int w, int h) {
 }
 
 
+void processSpecialKeys(int key, int xx, int yy) {
+
+    float fraction = 0.1f;
 
 
-void initScene(){
+    int mod = glutGetModifiers();
+    bool isShift = false;
+
+    switch (mod) {
+        case GLUT_ACTIVE_SHIFT:
+            isShift = true;
+            break;
+    }
+
+    switch (key) {
+        case GLUT_KEY_LEFT :
+            camera = rotateY(camera, -fraction);
+            break;
+        case GLUT_KEY_RIGHT :
+            camera = rotateY(camera, fraction);
+            break;
+        case GLUT_KEY_UP :
+            camera = rotateX(camera, -fraction);
+            break;
+        case GLUT_KEY_DOWN :
+            camera = rotateX(camera, fraction);
+            break;
+    }
+
+    // camera.normalize();
+
+    // camera *= 3.0;
+}
+
+
+
+void myKeyboard (unsigned char key, int x, int y) {
+    switch (key) {
+        case '+':
+            zoomFactor *= SCALE_DELTA;
+            break;
+
+        case '-':
+            zoomFactor /= SCALE_DELTA;
+            break;
+    }
+
+    glutPostRedisplay();
+}
+
+
+
+clock_t begin1;
+void initScene() {
+    begin1 = clock();
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Clear to black, fully transparent
 
 
@@ -386,7 +457,7 @@ void initScene(){
 
     arm = System(bones);
 
-    goals.push_back(Vector3d(2.0, 0.0, 0.0));
+    // goals.push_back(Vector3d(1.2, 1.2, 0.0));
     // goals.push_back(Vector3d(1.45, 0.0, 0.0));
     // goals.push_back(Vector3d(1.46, 0.0, 0.0));
     // goals.push_back(Vector3d(1.47, 0.0, 0.0));
@@ -431,27 +502,81 @@ void initScene(){
 }
 
 
-
+clock_t now; 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(50.0*zoomFactor, viewport.w/viewport.h, 1.0, 10.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
 
+    // gluLookAt(1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+    gluLookAt(  camera[0], camera[1], camera[2],
+            0.0f, 1.0f,  0.0f,
+            0.0f, 1.0f,  0.0f);
+
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+
+    // GLfloat lightColor0[] = { 1.0f, 1.0f, 1.0f, 1.0f }; //Color (0.5, 0.5, 0.5)
+    GLfloat lightPos0[] = { 1.0f, 3.0f, 3.0f, 1.0f };
+    // glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor0);
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos0);
+    GLfloat lightPos1[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    // glLightfv(GL_LIGHT0, GL_POSITION, lightPos1);
+
+    GLfloat ambient[] = { 0.2f, 0.2f, 0.2f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+
     glShadeModel(GL_FLAT);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+    now = clock();
+    double t2 = now - begin1;
+    cout << t2 / CLOCKS_PER_SEC << endl;
 
-    if (arm.update(goals[currGoalIndex]) ) {
+    double j = 0;
+    glBegin(GL_LINE_STRIP);
+    while (j < 7.0){
 
-        if (currGoalIndex < goals.size() - 1) {
-            currGoalIndex++;
-        }
-        // currGoalIndex = (currGoalIndex + 1) % goals.size();
+        glVertex3d(.8 + .4*cos(j), 1.0 +   .4*sin(2 * j), -1.0);
+        glVertex3d(.8 + .4*cos(j + .01), 1.0 +  .4*sin(2 * j + .01), -1.0);
+
+        j = j + .01;
     }
+    glEnd();
+    Vector3d goal1(.8 + .4*cos(.00001*t2), 1.0 +  .4*sin(.00001*2*t2), -1.0);
+    arm.update(goal1);
+
+
     arm.render();
+
+    glPushMatrix();
+
+    // glScaled(6, 6, 6);
+
+    GLfloat lightColor0[] = { 0.8f, 0.8f, 0.8f, 1.0f }; //Color (0.5, 0.5, 0.5)
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor0);
+
+    GLfloat lightColorspec[] = {1.0f,1.0f,1.0f, 1.0f };
+    
+    GLfloat exp[] = {100.0};
+    glLightfv(GL_LIGHT0, GL_SPECULAR, lightColorspec);
+    glLightfv(GL_LIGHT0, GL_SPOT_EXPONENT, exp);
+
+    glBegin(GL_POLYGON);
+        glVertex3d(-3.0, 0.0, -3.0);
+        glVertex3d(-3.0, 0.0, 3.0);
+        glVertex3d(3.0, 0.0, 3.0);
+        glVertex3d(3.0, 0.0, -3.0);
+    glEnd();
+
+    glPopMatrix();
 
     glFlush();
     glutSwapBuffers();
@@ -489,7 +614,8 @@ int main(int argc, char *argv[]) {
     initScene();                                 // quick function to set up scene
 
     glEnable(GL_DEPTH_TEST);
-
+    glutKeyboardFunc(myKeyboard);
+    glutSpecialFunc(processSpecialKeys);
     glutDisplayFunc(display);                    // function to run when its time to draw something
     glutReshapeFunc(myReshape);                  // function to run when the window gets resized
     glutIdleFunc(myFrameMove);                   // function to run when not handling any other task
